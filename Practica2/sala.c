@@ -98,10 +98,9 @@ void gestion_sala_shell(void) {
     while (1) {
         printf("> ");
         if (scanf("%255s", comando) != 1) {
-            // Limpiar el buffer de entrada si hay un error
             int c;
-            while ((c = getchar()) != '\n' && c != EOF); // Ignora hasta el final de la línea
-            continue; // Vuelve al inicio del bucle
+            while ((c = getchar()) != '\n' && c != EOF);
+            continue;
         }
 
         if (strcmp(comando, "reserva") == 0) {
@@ -114,10 +113,9 @@ void gestion_sala_shell(void) {
                 }
             } else {
                 printf("Error en la lectura del ID para reserva.\n");
-                while (getchar() != '\n'); // Limpiar el buffer de entrada
+                while (getchar() != '\n');
             }
         }
-        // Repetir el patrón para los demás comandos
         else if (strcmp(comando, "libera") == 0) {
             if (scanf("%d", &id) == 1) {
                 resultado = libera_asiento(id);
@@ -128,13 +126,30 @@ void gestion_sala_shell(void) {
                 }
             } else {
                 printf("Error en la lectura del ID para liberar.\n");
-                while (getchar() != '\n'); // Limpiar el buffer de entrada
+                while (getchar() != '\n');
             }
+        } else if (strcmp(comando, "estado_asiento") == 0) {
+            if (scanf("%d", &id) == 1) {
+                resultado = estado_asiento(id);
+                if (resultado != -1) {
+                    printf("Asiento %d está ocupado por la persona con ID %d.\n", id, resultado);
+                } else {
+                    printf("Asiento %d está libre.\n", id);
+                }
+            } else {
+                printf("Error en la lectura del ID para estado de asiento.\n");
+                while (getchar() != '\n');
+            }
+        }
+        else if (strcmp(comando, "estado_sala") == 0) {
+            printf("Asientos ocupados: %d\n", asientos_ocupados());
+            printf("Asientos libres: %d\n", asientos_libres());
+            printf("Capacidad de la sala: %d\n", capacidad_sala());
         }
         else if (strcmp(comando, "cerrar_sala") == 0) {
             elimina_sala();
             printf("Sala cerrada. Terminando mini-shell...\n");
-            break; // Rompe el bucle y finaliza la función
+            break;
         }
         else {
             printf("Comando no reconocido.\n");
@@ -143,36 +158,48 @@ void gestion_sala_shell(void) {
 }
 
 void crea_sucursal(const char* ciudad, int capacidad) {
-    pid_t pid = fork();
-
-    if (pid < 0) {
-        perror("Error al crear el proceso hijo (fork failed)");
+    int estadoSala = crea_sala(capacidad);
+    if (estadoSala == -1) {
+        fprintf(stderr, "Error al crear la sala con capacidad %d.\n", capacidad);
         exit(EXIT_FAILURE);
-    } else if (pid == 0) {
-        int estadoSala = crea_sala(capacidad);
-        if (estadoSala == -1) {
-            fprintf(stderr, "Error al crear la sala con capacidad %d.\n", capacidad);
+    }
+
+    printf("La sucursal '%s' ha sido creada con éxito.\n", ciudad);
+
+    for (int i = 0; i < 4; ++i) {
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("Error al crear el proceso hijo (fork failed)");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
+                   "exec ./gestion_sala shell; exec bash", NULL);
+            perror("Error al ejecutar gnome-terminal");
             exit(EXIT_FAILURE);
         }
-        gestion_sala_shell();
-        exit(EXIT_SUCCESS); // El proceso hijo termina después del mini-shell
-    } else {
-        printf("La sucursal '%s' ha sido creada con éxito. PID del proceso hijo: %d\n", ciudad, pid);
-        // El proceso principal sigue ejecutándose y no debe salir aquí
     }
+
+    int status;
+    while ((wait(&status)) > 0);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc == 2 && strcmp(argv[1], "shell") == 0) {
+        gestion_sala_shell();
+        return 0;
+    }
+
+    printf("Programa de gestión de salas iniciado.\n");
     char ciudad[100];
     int capacidad;
     
-    printf("Programa de gestión de salas iniciado.\n");
     while (1) {
         printf("Introduce el nombre de la nueva sala (o 'salir' para terminar): ");
         fflush(stdout);
 
         if (scanf("%99s", ciudad) != 1) {
-            while (getchar() != '\n'); // Limpieza del buffer de entrada
+            while (getchar() != '\n');
             continue;
         }
 
@@ -186,16 +213,13 @@ int main() {
 
         if (scanf("%d", &capacidad) != 1 || capacidad <= 0 || capacidad > CAPACIDAD_MAXIMA) {
             printf("Entrada inválida. La capacidad debe ser un número entre 1 y %d.\n", CAPACIDAD_MAXIMA);
-            while (getchar() != '\n'); // Limpieza del buffer de entrada
+            while (getchar() != '\n');
             continue;
         }
 
         crea_sucursal(ciudad, capacidad);
-        // Se espera a que los procesos hijos terminen antes de aceptar más entradas
-        int status;
-        wait(&status); // Se espera a que el último proceso hijo termine antes de continuar
+        break;
     }
 
-    printf("Programa de gestión terminado.\n");
     return 0;
 }
