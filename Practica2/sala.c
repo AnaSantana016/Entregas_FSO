@@ -53,18 +53,19 @@ int elimina_sala() {
 
 // Función para reservar un asiento para una persona
 int reserva_asiento(int id_persona) {
-    if (asientos == NULL || id_persona <= 0) {
-        return -1;
+    if (asientos == NULL || id_persona <= 0 || asientos_ocupados() >= capacidad_actual) {
+        return -1; // Sala llena o entrada inválida
     }
     for (int i = 0; i < capacidad_actual; i++) {
-        if (asientos[i] == -1) {
-            asientos[i] = id_persona;
+        if (asientos[i] == -1) { // Asiento libre encontrado
+            asientos[i] = id_persona; // Reservar asiento
             asientosOcupados++;
-            return i + 1;
+            return i + 1; // Retornar el número de asiento reservado
         }
     }
-    return -1;
+    return -1; // No debería llegar aquí si hay asientos libres
 }
+
 
 // Función para liberar un asiento reservado
 int libera_asiento(int id_asiento) {
@@ -111,6 +112,36 @@ int capacidad_sala() {
     return capacidad_actual;
 }
 
+int reserva_multiple_asientos(int cantidad) {
+    // Verificar que hay suficientes asientos libres y que la entrada es válida
+    if (asientos == NULL || cantidad <= 0 || cantidad > asientos_libres()) {
+        return -1;
+    }
+    int reservados = 0;
+    for (int i = 0; i < capacidad_actual && reservados < cantidad; i++) {
+        if (asientos[i] == -1) { // Asiento libre encontrado
+            asientos[i] = 0; // Reservar asiento (ajustar según la lógica de identificación de usuario)
+            reservados++;
+            asientosOcupados++; // Incrementar el contador de asientos ocupados
+        }
+    }
+    return reservados; // Devolver el número de asientos realmente reservados
+}
+
+// Función para limpiar todos los asientos de la sala, haciéndolos disponibles
+void limpia_sala() {
+    if (asientos == NULL) {
+        printf("No hay una sala creada para limpiar.\n");
+        return;
+    }
+
+    for (int i = 0; i < capacidad_actual; i++) {
+        asientos[i] = -1; // Marcar cada asiento como disponible
+    }
+    asientosOcupados = 0; // Actualizar el contador de asientos ocupados
+    printf("Todos los asientos de la sala han sido liberados.\n");
+}
+
 // Función para manejar la señal SIGCHLD
 void signal_handler(int sig, siginfo_t *siginfo, void *context) {
     int status;
@@ -137,7 +168,6 @@ void setup_signal_handler() {
     }
 }
 
-// Función para gestionar la sala desde la shell
 void gestion_sala_shell(void) {
     char comando[256];
     int id, resultado;
@@ -196,6 +226,21 @@ void gestion_sala_shell(void) {
             elimina_sala();
             printf("Sala cerrada con estado %d. Terminando mini-shell...\n", final_status);
             exit(final_status);
+        } else if (strcmp(comando, "limpia_sala") == 0) {
+            limpia_sala();
+        } else if (strcmp(comando, "reserva_multiple") == 0) {
+            int cantidad;
+            if (scanf("%d", &cantidad) == 1) {
+                resultado = reserva_multiple_asientos(cantidad);
+                if (resultado > 0) {
+                    printf("%d asientos reservados exitosamente.\n", resultado);
+                } else {
+                    printf("No se pudieron reservar %d asientos.\n", cantidad);
+                }
+            } else {
+                printf("Error en la lectura de la cantidad para reserva múltiple.\n");
+                while (getchar() != '\n');
+            }
         } else {
             printf("Comando no reconocido.\n");
         }
