@@ -6,18 +6,14 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <signal.h>
-
-#define MAX_SALAS 10
+#include <fcntl.h>
+#include <sys/stat.h>
 
 static int *asientos = NULL;
 static int capacidad_actual = 0;
 static int asientosOcupados = 0;
 
-typedef struct {
-    pid_t pid;
-    char ciudad[100];
-    int activa;
-} Sala;
+#include "sala.h"
 
 Sala salas[MAX_SALAS];
 int numero_salas = 0;
@@ -303,64 +299,79 @@ void cerrar_todas_las_salas() {
     }
 }
 
-int main(int argc, char *argv[]) {
-    if (argc > 1 && strcmp(argv[1], "gestion") == 0) {
-        if (argc != 4) {
-            fprintf(stderr, "Uso: %s gestion <ciudad> <capacidad>\n", argv[0]);
-            exit(EXIT_FAILURE);
-        }
-        const char* ciudad = argv[2];
-        int capacidad = atoi(argv[3]);
-
-        printf("Gestión de sala para '%s' con capacidad %d iniciada.\n", ciudad, capacidad);
-        if (crea_sala(capacidad) == -1) {
-            fprintf(stderr, "Error al crear la sala.\n");
-            exit(EXIT_FAILURE);
-        }
-        gestion_sala_shell();
-        elimina_sala();
-        exit(EXIT_SUCCESS);
-    } else {
-        setup_signal_handler();
-        char ciudad[100];
-        int capacidad;
-
-        printf("Programa de gestión de salas iniciado.\n");
-        while (1) {
-            printf("Introduce el nombre de la nueva sala (o 'salir' para terminar): ");
-            fflush(stdout);
-
-            if (scanf("%99s", ciudad) != 1) {
-                while (getchar() != '\n');
-                continue;
-            }
-
-            if (strcmp(ciudad, "salir") == 0) {
-                cerrar_todas_las_salas();
-                break;
-            }
-
-            printf("Introduce la capacidad de la sala: ");
-            fflush(stdout);
-
-            if (scanf("%d", &capacidad) != 1 || capacidad <= 0 || capacidad > CAPACIDAD_MAXIMA) {
-                printf("Entrada inválida. La capacidad debe ser un número entre 1 y %d.\n", CAPACIDAD_MAXIMA);
-                while (getchar() != '\n');
-                continue;
-            }
-
-            crea_sucursal(ciudad, capacidad);
-            comprobar_salas();
-        }
-
-        for (int i = 0; i < numero_salas; i++) {
-            if (salas[i].activa) {
-                int status;
-                waitpid(salas[i].pid, &status, 0);
-            }
-        }
-
-        printf("Programa de gestión terminado.\n");
-        return 0;
+//Practica3
+// Guarda el estado completo de la sala en un fichero
+int guarda_estado_sala(const char* ruta_fichero) {
+    int fd = open(ruta_fichero, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        return -1; // Error al abrir el fichero
     }
+    if (write(fd, &capacidad_actual, sizeof(capacidad_actual)) != sizeof(capacidad_actual) ||
+        write(fd, &asientosOcupados, sizeof(asientosOcupados)) != sizeof(asientosOcupados) ||
+        write(fd, asientos, capacidad_actual * sizeof(int)) != capacidad_actual * sizeof(int)) {
+        close(fd);
+        return -1; // Error al escribir en el fichero
+    }
+    close(fd);
+    return 0;
+}
+
+// Recupera el estado completo de la sala desde un fichero
+int recupera_estado_sala(const char* ruta_fichero) {
+    int fd = open(ruta_fichero, O_RDONLY);
+    if (fd == -1) {
+        return -1; // Error al abrir el fichero
+    }
+    if (read(fd, &capacidad_actual, sizeof(capacidad_actual)) != sizeof(capacidad_actual) ||
+        read(fd, &asientosOcupados, sizeof(asientosOcupados)) != sizeof(asientosOcupados)) {
+        close(fd);
+        return -1; // Error al leer del fichero
+    }
+    asientos = realloc(asientos, capacidad_actual * sizeof(int));
+    if (asientos == NULL) {
+        close(fd);
+        return -1; // Error al realocar memoria
+    }
+    if (read(fd, asientos, capacidad_actual * sizeof(int)) != capacidad_actual * sizeof(int)) {
+        close(fd);
+        return -1; // Error al leer del fichero
+    }
+    close(fd);
+    return 0;
+}
+
+// Guarda el estado parcial de algunos asientos en un fichero
+int guarda_estadoparcial_sala(const char* ruta_fichero, size_t num_asientos, int* id_asientos) {
+    int fd = open(ruta_fichero, O_WRONLY);
+    if (fd == -1) {
+        return -1; // Error al abrir el fichero
+    }
+    for (size_t i = 0; i < num_asientos; i++) {
+        off_t pos = id_asientos[i] * sizeof(int);
+        if (lseek(fd, pos, SEEK_SET) == (off_t)-1 || 
+            write(fd, &asientos[id_asientos[i]], sizeof(int)) != sizeof(int)) {
+            close(fd);
+            return -1; // Error al escribir en el fichero
+        }
+    }
+    close(fd);
+    return 0;
+}
+
+// Recupera el estado parcial de algunos asientos desde un fichero
+int recupera_estadoparcial_sala(const char* ruta_fichero, size_t num_asientos, int* id_asientos) {
+    int fd = open(ruta_fichero, O_RDONLY);
+    if (fd == -1) {
+        return -1; // Error al abrir el fichero
+    }
+    for (size_t i = 0; i < num_asientos; i++) {
+        off_t pos = id_asientos[i] * sizeof(int);
+        if (lseek(fd, pos, SEEK_SET) == (off_t)-1 || 
+            read(fd, &asientos[id_asientos[i]], sizeof(int)) != sizeof(int)) {
+            close(fd);
+            return -1; // Error al leer del fichero
+        }
+    }
+    close(fd);
+    return 0;
 }
