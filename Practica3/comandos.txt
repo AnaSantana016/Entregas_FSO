@@ -1,9 +1,0 @@
-gcc -o misala misala.c sala.c
-
-./misala crea -fo mi_sala.txt -c 10
-
-./misala reserva -f mi_sala.txt 1 2 3
-
-./misala estado -f mi_sala.txt
-
-./misala anula -f mi_sala.txt -asientos 2
