@@ -16,15 +16,18 @@ gcc misala.c -o misala -lsala -L../lib
 
 # Ejecutar el programa compilado
 echo "Compilando la biblioteca y compilando el programa misala"
-echo ========================================
-echo "Ejecutando el programa misala"
-echo ========================================
+echo "========================================"
+echo "Para probar el programa misala, ejecute los siguientes comandos:"
+echo "========================================"
+echo "cd Practica3/fuentes/"
+echo "./misala ... "
+echo "========================================"
 echo "Ayuda del programa misala"
 echo "./misala crea -f archivo.txt -c capacidad"
 echo "./misala crea -f archivo.txt -c capacidad -o para sobreescribir un archivo"
 echo "./misala reserva -f archivo.txt -n numero id-asiento"
 echo "./misala anula -f archivo.txt -a id-asiento"
 echo "./misala estado -f archivo.txt"
-echo "./misala confirmaciones -f archivo.txt -a id-asiento"
 echo "./misala elimina -f archivo.txt"
-
+echo "./misala compara archivo.txt archivo2.txt"
+echo "========================================"

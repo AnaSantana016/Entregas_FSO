@@ -8,6 +8,9 @@
 #include <sys/types.h>
 #include "../cabeceras/sala.h"
 
+extern int* capacidad_sala;
+extern int PLAZAS;          
+
 //Función misala.c
 
 int misala_crea(char* ruta, int capacidad, int sobreescribir){
@@ -146,69 +149,63 @@ int misala_anula(char* ruta, int num_asientos, int* id_asientos){
 	return 0;
 }
 
-int misala_confirmaciones(char* ruta, int num_asientos, int* id_asientos){
-	
-	//Te elimina todo lo demás que tu no selecciones
-	if(ruta == NULL){
-		fprintf(stderr, "Error: no se proporcionó la ruta del archivo.\n");
-		return -1;
-	}
-	
-	if(access(ruta, W_OK) != 0){
-		fprintf(stderr, "Error: no hay permisos de escritura\n");
-		return -1;
-	}
-	
-	//Recupera el estado inicial de la sala en el archivo.
-	if (recupera_estadoparcial_sala(ruta, num_asientos, id_asientos) == -1){
-		elimina_sala();
-		fprintf(stderr, "Error: no se pudo recuperar el estado de la sala en el archivo.\n");
-		return -1;
-	}
-	
-	//Guarda el estado parcial de la sala en el archivo.
-	if (guarda_estado_sala(ruta) == -1){
-		elimina_sala();
-		fprintf(stderr, "Error: no se pudo guardar el estado parcial de la sala en el archivo.\n");
-		return -1;
-	}
-	
-	elimina_sala();
-	return 0;
-}
-
 int misala_compara(char* ruta1, char* ruta2) {
-	int capacidad_sala[capacidad()];
     if (ruta1 == NULL || ruta2 == NULL) {
         fprintf(stderr, "Error: Rutas de archivo no proporcionadas.\n");
         return -1;
     }
 
     if (access(ruta1, R_OK) != 0 || access(ruta2, R_OK) != 0) {
-        fprintf(stderr, "Error: Problemas de acceso con los archivos.\n");
+        fprintf(stderr, "Error: Problemas de acceso con los archivos: %s\n", strerror(errno));
         return -1;
     }
 
-    if (recupera_estado_sala(ruta1) == -1 || recupera_estado_sala(ruta2) == -1) {
-        fprintf(stderr, "Error: No se pudo cargar el estado de alguna de las salas.\n");
+    // Recupera el estado de las salas para la comparación
+    crea_sala(0);  // Asegurarse de que la sala está "limpia" antes de cargar el estado
+    if (recupera_estado_sala(ruta1) == -1) {
+        fprintf(stderr, "Error: No se pudo cargar el estado de la sala desde %s.\n", ruta1);
+        elimina_sala();
         return -1;
     }
-
-    // Asumimos que las funciones de recuperación de estado configuran una estructura global `capacidad_sala`
-    if (capacidad() != capacidad()) {
-        fprintf(stderr, "Las capacidades de las salas no coinciden.\n");
-        return 1;
+    int* estado_sala1 = malloc(PLAZAS * sizeof(int));
+    if (estado_sala1 == NULL) {
+        fprintf(stderr, "Error de memoria al asignar espacio para el estado de la sala.\n");
+        elimina_sala();
+        return -1;
     }
+    memcpy(estado_sala1, capacidad_sala, PLAZAS * sizeof(int));
 
-    for (int i = 0; i < capacidad(); i++) {
-        if (capacidad_sala[i] != capacidad_sala[i]) {
+    crea_sala(0);  // Limpiar antes de cargar el siguiente estado
+    if (recupera_estado_sala(ruta2) == -1) {
+        fprintf(stderr, "Error: No se pudo cargar el estado de la sala desde %s.\n", ruta2);
+        free(estado_sala1);
+        elimina_sala();
+        return -1;
+    }
+    int* estado_sala2 = malloc(PLAZAS * sizeof(int));
+    if (estado_sala2 == NULL) {
+        fprintf(stderr, "Error de memoria al asignar espacio para el estado de la sala.\n");
+        free(estado_sala1);
+        elimina_sala();
+        return -1;
+    }
+    memcpy(estado_sala2, capacidad_sala, PLAZAS * sizeof(int));
+
+    // Comparar estados
+    for (int i = 0; i < PLAZAS; i++) {
+        if (estado_sala1[i] != estado_sala2[i]) {
+            free(estado_sala1);
+            free(estado_sala2);
+            elimina_sala();
             return 1;  // Las salas son diferentes
         }
     }
 
+    free(estado_sala1);
+    free(estado_sala2);
+    elimina_sala();
     return 0;  // Las salas son iguales
 }
-
 
 int misala_estado(char* ruta){
 	
@@ -540,79 +537,6 @@ int main(int argc, char *argv[]){
 		
 		free(ruta);
 		return 0;
-	
-	
-	}else if(strcmp(argv[1], "confirmaciones") == 0){
-	
-	
-		while ((caracter=getopt(argc, argv, "f:a:")) != -1){
-			
-			switch(caracter) {
-				
-				case 'f':
-					flag_f = 1;
-					if (optarg == NULL){
-						fprintf(stderr, "Error: argumento vacío para -f\n");
-						return -1;
-					}
-					ruta = strdup(optarg);
-					break;
-					
-				case 'a':
-    					flag_a = 1;
-    					num_asientos = argc - optind+1;
-    					if(num_asientos <= 0){
-        					fprintf(stderr, "Error: debe especificar al menos un ID de asiento para anular\n");
-        					return -1;
-    					}
-
-    					id_asientos = malloc(num_asientos * sizeof(int));
-    					if(id_asientos == NULL){
-        					fprintf(stderr, "Error: no se pudo asignar memoria\n");
-        					free(id_asientos);
-        					return -1;
-    					}
-    
-    					id_asientos[0] = atoi(argv[optind -1]);
-    					for(int i = optind; i < argc; i++){
-        					id_asientos[i - optind+1] = atoi(argv[i]);
-    					}
-    					break;
-					
-				case '?':
-					flag_inc = 1;
-					printf("Opción inesperada: %c\n", optopt);
-					break;
-					
-					
-				default:
-					fprintf(stderr, "Uso: ./misala %s -f ruta -a id_asiento1 [id_asiento2...] \n" , argv[1]);
-					break;
-			}
-		}
-		
-		if(flag_f == 0 || flag_a == 0){
-			fprintf(stderr, "Error: no se proporcionan los argumentos necesarios.\n");			
-			return -1;
-			
-		}
-		
-		if(flag_inc == 1){
-			fprintf(stderr, "Error: no se proporcionan los argumentos adecuados.\n");			
-			return -1;
-		}
-		
-		if(misala_confirmaciones(ruta, num_asientos, id_asientos) == -1){
-			fprintf(stderr, "Error: no se pudo confirmar los asientos.\n");
-			return -1;
-		}
-	
-		free(id_asientos);
-		free(ruta);
-		return 0;
-		
-	
-	
 	}else if (strcmp(argv[1], "elimina") == 0) {
 		char* ruta = NULL;
 		int flag_f = 0;
